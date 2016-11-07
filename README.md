@@ -6,7 +6,7 @@ The goal of this project is to inject components between each wiring end of the 
 
 * Install TinyOS
 * Pass .nc file to the application
-  - `runhaskell Parser.hs $(locate -l 1 /Boot.nc)`
+  - `runhaskell Parser.hs $(locate -l 1 /Timer.nc)`
 
 ## Steps
 
