@@ -10,6 +10,6 @@ The goal of this project is to inject components between each wiring end of the 
 
 ## Steps
 
-- [] Parse interfaces
-- [] Generate connector components for each wiring
-- [] Parse application and use connector components
+- [ ] Parse interfaces
+- [ ] Generate connector components for each wiring
+- [ ] Parse application and use connector components
