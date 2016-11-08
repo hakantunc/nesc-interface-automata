@@ -1,6 +1,8 @@
 -- based on http://jakewheat.github.io/intro_to_parsing
 -- grammar specification is at https://github.com/pillforge/nesc/blob/master/doc/ref.pdf
 
+module Parser(myParser) where
+
 import Control.Monad
 import System.Environment
 import Text.Parsec
