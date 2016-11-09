@@ -1,5 +1,6 @@
 -- based on http://jakewheat.github.io/intro_to_parsing
--- grammar specification is at https://github.com/pillforge/nesc/blob/master/doc/ref.pdf
+-- grammar specification for nesc and c
+--   source: https://github.com/pillforge/nesc/blob/master/doc/ref.pdf
 
 module Parser(myParser) where
 
@@ -7,13 +8,33 @@ import Control.Monad
 import System.Environment
 import Text.Parsec
 import Text.Parsec.String
+import Data.Functor.Identity
 
 data InterfaceDefinition = InterfaceDefinition
   InterfaceKeyword Identifier TypeParameters DeclarationList deriving (Eq, Show)
 data InterfaceKeyword = Interface deriving (Eq, Show)
 type Identifier = String
 type TypeParameters = [Identifier]
-type DeclarationList = [String]
+type DeclarationList = [Declaration]
+data Declaration = Declaration DeclarationSpecifiers InitDeclaratorList deriving (Eq, Show)
+type DeclarationSpecifiers = [DeclarationSpecifier]
+data DeclarationSpecifier = SCS StorageClassSpecifier | TS TypeSpecifier deriving (Eq, Show)
+type InitDeclaratorList = [InitDeclarator]
+data InitDeclarator = InitDeclarator Declarator deriving (Eq, Show)
+type Declarator = DirectDeclarator
+data DirectDeclarator = DDPTL Identifier ParameterTypeList deriving (Eq, Show)
+type ParameterTypeList = [ParameterList]
+type ParameterList = ParameterDeclaration
+data ParameterDeclaration = PDDSD DeclarationSpecifier Identifier deriving (Eq, Show)
+data StorageClassSpecifier = Auto | Register | Static | Extern | Typedef
+                           | Command | Event | Async | Task | Norace deriving (Enum, Eq, Show)
+data TypeSpecifier = Void | Char | Short | Int | Long
+                   | Float | Double | Signed | Unsigned
+                   | Int8_t | Int16_t | Int32_t | Int64_t
+                   | Uint8_t | Uint16_t | Uint32_t | Uint64_t
+                   | Bool
+                   -- | TypedefName Identifier -- hard to handle, check page 234 in K&R.
+                   deriving (Eq, Show)
 
 interfaceDefinition :: Parser InterfaceDefinition
 interfaceDefinition = InterfaceDefinition
@@ -41,13 +62,83 @@ declarationList :: Parser DeclarationList
 declarationList = between (symbol '{') (symbol '}') declarations
   where
     declarations = declaration `endBy` symbol ';'
-    declaration = many (noneOf ";}")
+
+declaration :: Parser Declaration
+declaration = Declaration <$> declarationSpecifiers <*> initDeclaratorList
+
+declarationSpecifiers :: Parser DeclarationSpecifiers
+declarationSpecifiers = many declarationSpecifier
+
+declarationSpecifier :: Parser DeclarationSpecifier
+declarationSpecifier = choice
+                         [ SCS <$> storageClassSpecifier
+                         , TS  <$> typeSpecifier]
+
+initDeclaratorList :: Parser InitDeclaratorList
+initDeclaratorList = many initDeclarator
+
+initDeclarator :: Parser InitDeclarator
+initDeclarator = InitDeclarator <$> declarator
+
+declarator :: Parser Declarator
+declarator = directDeclarator
+
+directDeclarator :: Parser DirectDeclarator
+directDeclarator = DDPTL <$> identifier <*> between (symbol '(') (symbol ')') parameterTypeList
+
+parameterTypeList :: Parser ParameterTypeList
+parameterTypeList = parameterList `sepBy` symbol ','
+
+parameterList :: Parser ParameterList
+parameterList = parameterDeclaration
+
+parameterDeclaration :: Parser ParameterDeclaration
+parameterDeclaration = PDDSD <$> declarationSpecifier <*> identifier
+
+storageClassSpecifier :: Parser StorageClassSpecifier
+storageClassSpecifier = choice
+                          [ Auto     <$ trylexemestr "auto"
+                          , Register <$ trylexemestr "register"
+                          , Static   <$ trylexemestr "static"
+                          , Extern   <$ trylexemestr "extern"
+                          , Typedef  <$ trylexemestr "typedef"
+                          , Command  <$ trylexemestr "command"
+                          , Event    <$ trylexemestr "event"
+                          , Async    <$ trylexemestr "async"
+                          , Task     <$ trylexemestr "task"
+                          , Norace   <$ trylexemestr "norace"]
+
+typeSpecifier :: Parser TypeSpecifier
+typeSpecifier = choice
+                  [ Void        <$ trylexemestr "void"
+                  , Char        <$ trylexemestr "char"
+                  , Short       <$ trylexemestr "short"
+                  , Int         <$ trylexemestr "int"
+                  , Long        <$ trylexemestr "long"
+                  , Float       <$ trylexemestr "float"
+                  , Double      <$ trylexemestr "double"
+                  , Signed      <$ trylexemestr "signed"
+                  , Unsigned    <$ trylexemestr "unsigned"
+                  -- , TypedefName <$> identifier
+                  , Int8_t      <$ trylexemestr "int8_t"
+                  , Int16_t     <$ trylexemestr "int16_t"
+                  , Int32_t     <$ trylexemestr "int32_t"
+                  , Int64_t     <$ trylexemestr "int64_t"
+                  , Uint8_t     <$ trylexemestr "uint8_t"
+                  , Uint16_t    <$ trylexemestr "uint16_t"
+                  , Uint32_t    <$ trylexemestr "uint32_t"
+                  , Uint64_t    <$ trylexemestr "uint64_t"
+                  , Bool        <$ trylexemestr "bool"
+                  ]
 
 lexeme :: Parser a -> Parser a
 lexeme p = whitespace >> p <* whitespace
 
 symbol :: Char -> Parser Char
 symbol c = lexeme $ char c
+
+trylexemestr :: String -> ParsecT String () Data.Functor.Identity.Identity String
+trylexemestr = try . lexeme . string
 
 whitespace :: Parser ()
 whitespace =
