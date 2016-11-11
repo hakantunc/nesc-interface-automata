@@ -20,3 +20,4 @@ main = hspec $
     it "Boot" $ parse "Boot"
     it "Timer" $ parse "Timer"
     it "Leds" $ parse "Leds"
+    it "BlinkAppC" $ parse "BlinkAppC"
