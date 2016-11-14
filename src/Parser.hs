@@ -2,7 +2,7 @@
 -- grammar specification for nesc and c
 --   source: https://github.com/pillforge/nesc/blob/master/doc/ref.pdf
 
-module Parser(myParser) where
+module Parser where
 
 import Control.Monad
 import System.Environment
@@ -255,12 +255,5 @@ whitespace =
     preprocessorDirectives = try (string "#")
                                *> manyTill anyChar (void (char '\n') <|> eof)
 
-myParser :: Parser NescFile
-myParser = nescFile
-
-main :: IO ()
-main = do
-  a <- getArgs
-  case a of
-    [str] -> parseFromFile myParser str >>= either print print
-    _ -> error "please pass one argument with the file containing the text to parse"
+parseNesc :: String -> IO (Either ParseError NescFile)
+parseNesc = parseFromFile nescFile

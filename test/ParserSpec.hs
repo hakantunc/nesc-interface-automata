@@ -9,7 +9,7 @@ import Data.List (delete)
 parse :: String -> IO ()
 parse x = do
   loc <- readCreateProcess (shell $ "locate -l 1 /" ++ x ++ ".nc") ""
-  parseFromFile myParser (delete '\n' loc) >>= f >>= (`shouldBe` True)
+  parseNesc (delete '\n' loc) >>= f >>= (`shouldBe` True)
   where
     f (Left  _) = return False
     f (Right _) = return True
