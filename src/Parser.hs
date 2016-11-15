@@ -37,9 +37,10 @@ data TypeSpecifier = Void | Char | Short | Int | Long
                    -- | TypedefName Identifier -- hard to handle, check page 234 in K&R.
                    deriving (Eq, Show)
 data Component = Component
-  CompKind Identifier ComponentSpecification Implementation deriving (Eq, Show)
+  CompKind Identifier (Maybe CompParameters) ComponentSpecification Implementation deriving (Eq, Show)
 data CompKind = Module | ComponentKeyword | Configuration | GenericModule | GenericConfiguration
                   deriving (Eq, Show)
+type CompParameters = String
 type ComponentSpecification = String
 type Implementation = ConfigurationImplementation
 type ConfigurationImplementation = ConfigurationElementList
@@ -162,6 +163,7 @@ component :: Parser Component
 component = Component
               <$> compKind
               <*> identifier
+              <*> optionMaybe compParameters
               <*> componentSpecification
               <*> implementation
 
@@ -173,6 +175,9 @@ compKind = choice
              , GenericModule        <$ trylexemestr "generic module"
              , GenericConfiguration <$ trylexemestr "generic configuration"
              ]
+
+compParameters :: Parser CompParameters
+compParameters = between (symbol '(') (symbol ')') (many (noneOf ")"))
 
 componentSpecification :: Parser ComponentSpecification
 componentSpecification = between (symbol '{') (symbol '}') (string "")
