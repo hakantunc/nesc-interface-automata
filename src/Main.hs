@@ -1,8 +1,11 @@
 module Main where
 
-import System.Environment
 import Parser
 import PrettyPrint
+import System.Directory
+import System.Environment
+import System.FilePath.Posix
+import System.IO
 import Text.PrettyPrint (render)
 
 class GetConnection a where
@@ -30,8 +33,8 @@ This generated configuration will go between connected components in
   will pass the commands and events. It is expected that
   this will not affect the callgraph of the original application.
 -} 
-generateConnectorConfiguration :: Connection -> NescFile
-generateConnectorConfiguration x = C component
+generateConnectorConfiguration :: Connection -> (String, NescFile)
+generateConnectorConfiguration x = (comp_name, C component)
   where
     component = Component GenericConfiguration comp_name (Just "") specification implementation
     comp_name = interface ++ "ConnectorC"
@@ -42,7 +45,7 @@ generateConnectorConfiguration x = C component
       , CN (RightLink [newModule, uInterface] [provider, interface])
       , CN (Equate [interface] [newModule, pInterface])
       ]
-    [user, provider, interface] = getNames x
+    [user, provider, interface] = getNames x -- TODO: to get correct interface, we need to parse the module implementation
     newModule = interface ++ "ConnectorP"
     uInterface = interface ++ "U"
     pInterface = interface ++ "P"
@@ -59,4 +62,11 @@ main = do
     [str] -> parseNesc str >>= either print f
     _ -> error "please pass one argument with the file containing the text to parse"
   where
-    f = putStr . render . prettyPrint . generateConnectorConfiguration . head . getConnections
+    f nescFile = do
+      removeDirectoryRecursive distgen
+      createDirectory distgen
+      mapM_ (\(fname, content) ->
+        writeFile (distgen </> fname <.> ".nc") (render $ prettyPrint content))
+        (map generateConnectorConfiguration (getConnections nescFile))
+      putStr $ "Files are generated in directory: " ++ distgen ++ "\n"
+    distgen = "dist-gen"
