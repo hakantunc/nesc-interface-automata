@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Lens hiding ((<.>))
 import Parser
 import PrettyPrint
 import System.Directory
@@ -8,31 +9,17 @@ import System.FilePath.Posix
 import System.IO
 import Text.PrettyPrint (render)
 
-class GetConnection a where
-  getConnections :: a -> [Connection]
-
-instance GetConnection NescFile where
-  getConnections (I i) = []
-  getConnections (C c) = getConnections c
-
-instance GetConnection Component where
-  getConnections (Component Configuration _ _ _ i) = getConnections i
-  getConnections _ = []
-
-instance (GetConnection a) => GetConnection [a] where
-  getConnections [] = []
-  getConnections xs = concatMap getConnections xs
-
-instance GetConnection ConfigurationElement where
-  getConnections (CN c) = [c]
-  getConnections _ = []
 
 {-
 This generated configuration will go between connected components in
   the original application. It will record the state transitions and
   will pass the commands and events. It is expected that
   this will not affect the callgraph of the original application.
--} 
+-}
+
+getConnections :: NescFile -> [Connection]
+getConnections = toListOf (c . compImpl . traverse . cn)
+
 generateConnectorConfiguration :: Connection -> (String, NescFile)
 generateConnectorConfiguration x = (comp_name, C component)
   where
@@ -49,9 +36,9 @@ generateConnectorConfiguration x = (comp_name, C component)
     newModule = interface ++ "ConnectorP"
     uInterface = interface ++ "U"
     pInterface = interface ++ "P"
-    getNames (Equate a b)    = [head a, head b, lastElement a b]
-    getNames (LeftLink a b) = [head b, head a, lastElement a b]
-    getNames (RightLink a b)  = [head a, head b, lastElement a b]
+    getNames (Equate    a d) = [head a, head d, lastElement a d]
+    getNames (LeftLink  a d) = [head d, head a, lastElement a d]
+    getNames (RightLink a d) = [head a, head d, lastElement a d]
     lastElement e1 e2 =
       last $ if (length e1 > length e2) then e1 else e2
 

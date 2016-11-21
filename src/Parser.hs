@@ -1,16 +1,21 @@
+{-# LANGUAGE TemplateHaskell #-}
 -- based on http://jakewheat.github.io/intro_to_parsing
 -- grammar specification for nesc and c
 --   source: https://github.com/pillforge/nesc/blob/master/doc/ref.pdf
 
 module Parser where
 
+import Control.Lens hiding (noneOf)
 import Control.Monad
 import System.Environment
 import Text.Parsec
 import Text.Parsec.String
 import Data.Functor.Identity
 
-data NescFile = I InterfaceDefinition | C Component deriving (Eq, Show)
+data NescFile = I {_i :: InterfaceDefinition}
+              | C {_c :: Component}
+              deriving (Eq, Show)
+
 data InterfaceDefinition = InterfaceDefinition
   InterfaceKeyword Identifier TypeParameters DeclarationList deriving (Eq, Show)
 data InterfaceKeyword = Interface deriving (Eq, Show)
@@ -36,8 +41,15 @@ data TypeSpecifier = Void | Char | Short | Int | Long
                    | Bool
                    -- | TypedefName Identifier -- hard to handle, check page 234 in K&R.
                    deriving (Eq, Show)
-data Component = Component
-  CompKind Identifier (Maybe CompParameters) ComponentSpecification Implementation deriving (Eq, Show)
+
+data Component = Component {
+    _compType :: CompKind
+  , _compName :: Identifier
+  , _compPara :: Maybe CompParameters
+  , _compSpec :: ComponentSpecification
+  , _compImpl :: Implementation
+  } deriving (Eq, Show)
+
 data CompKind = Module | ComponentKeyword | Configuration | GenericModule | GenericConfiguration
                   deriving (Eq, Show)
 type CompParameters = String
@@ -45,7 +57,12 @@ type ComponentSpecification = String
 type Implementation = ConfigurationImplementation
 type ConfigurationImplementation = ConfigurationElementList
 type ConfigurationElementList = [ConfigurationElement]
-data ConfigurationElement = CC Components | CN Connection | CD Declaration deriving (Eq, Show)
+
+data ConfigurationElement = CC {_cc :: Components}
+                          | CN {_cn :: Connection}
+                          | CD {_cd :: Declaration}
+                          deriving (Eq, Show)
+
 type Components = [ComponentLine]
 data ComponentLine = ComponentLine ComponentRef InstanceName deriving (Eq, Show)
 data ComponentRef = CRI Identifier | CRNew Identifier ComponentArgumentList deriving (Eq, Show)
@@ -57,6 +74,10 @@ data Connection = Equate EndPoint EndPoint
                 | RightLink EndPoint EndPoint deriving (Eq, Show)
 type EndPoint = IdentifierPath
 type IdentifierPath = [Identifier]
+
+makeLenses ''NescFile
+makeLenses ''Component
+makeLenses ''ConfigurationElement
 
 nescFile :: Parser NescFile
 nescFile = choice
