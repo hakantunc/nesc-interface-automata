@@ -21,13 +21,23 @@ instance Pretty Identifier where
   prettyPrint = text
 
 instance Pretty Component where
-  prettyPrint (Component kind iden param spec imp) =
+  prettyPrint (Component kind iden param attr spec imp) =
     vcat [ prettyPrint kind <+> prettyPrint iden <> prettyPrint param <+> lbrace
-         , (nest 2 $ prettyPrint spec <> semi)
+         , nest 2 $ prettyPrint spec <> semi
          , rbrace
          , prettyPrint imp
          , text ""
          ]
+instance Pretty ComponentSpecification where
+  prettyPrint = hcat . map prettyPrint
+
+instance Pretty UsesProvides where
+  prettyPrint (Uses s) = text "uses" <+> prettyPrint s
+  prettyPrint (Provides s) = text "provides" <+> prettyPrint s
+
+instance Pretty SpecificationElementList where
+  prettyPrint (SpecElem s) =  prettyPrint s
+  prettyPrint (SpecElems s) = text ""
 
 instance Pretty CompKind where
   prettyPrint Module = text "module"
@@ -39,6 +49,13 @@ instance Pretty CompKind where
 instance Pretty (Maybe CompParameters) where
   prettyPrint Nothing = text ""
   prettyPrint (Just x) = parens $ text x
+
+instance Pretty Implementation where
+  prettyPrint (CI ci) = prettyPrint ci
+  prettyPrint (MI mi) = text "implementation"
+                          <+> lbrace
+                          <+> rbrace
+
 
 instance Pretty ConfigurationImplementation where
   prettyPrint xs =
@@ -70,4 +87,4 @@ instance Pretty Connection where
   prettyPrint (RightLink a b) = prettyPrint a <+> text "->" <+> prettyPrint b
 
 instance Pretty EndPoint where
-  prettyPrint xs = text $ intercalate "." xs
+  prettyPrint (EndPoint xs arg_list) = text $ intercalate "." xs

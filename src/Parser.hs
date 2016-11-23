@@ -10,6 +10,7 @@ import Control.Monad
 import System.Environment
 import Text.Parsec
 import Text.Parsec.String
+import qualified Text.Parsec.Token as T
 import Data.Functor.Identity
 
 data NescFile = I {_i :: InterfaceDefinition}
@@ -46,6 +47,7 @@ data Component = Component {
     _compType :: CompKind
   , _compName :: Identifier
   , _compPara :: Maybe CompParameters
+  , _compAttr :: Maybe Attributes
   , _compSpec :: ComponentSpecification
   , _compImpl :: Implementation
   } deriving (Eq, Show)
@@ -53,8 +55,41 @@ data Component = Component {
 data CompKind = Module | ComponentKeyword | Configuration | GenericModule | GenericConfiguration
                   deriving (Eq, Show)
 type CompParameters = String
-type ComponentSpecification = String
-type Implementation = ConfigurationImplementation
+type Attributes = String
+
+type ComponentSpecification = [UsesProvides]
+data UsesProvides = Uses     {_uses     :: SpecificationElementList}
+                  | Provides {_provides :: SpecificationElementList}
+                  deriving (Eq, Show)
+
+data SpecificationElementList = SpecElem  { _specElem  :: SpecificationElement}
+                              | SpecElems { _specElems :: SpecificationElements}
+                              deriving (Eq, Show)
+
+type SpecificationElements = [SpecificationElement]
+
+type SpecificationElement = String
+-- data SpecificationElement = SpecificationElement {
+--     _specElemIType :: InterfaceType
+--   , _specElemIName :: Maybe InstanceName
+--   , _specElemIPara :: Maybe InstanceParameters
+--   , _specElemAttr  :: Maybe Attributes
+--   } deriving (Eq, Show)
+
+data InterfaceType = InterfaceType {
+    _iTypeIdentifier :: Identifier
+  , _iTypeArguments  :: Maybe TypeArguments
+  } deriving (Eq, Show)
+type TypeArguments = [TypeName]
+type TypeName = String
+
+type InstanceParameters = ParameterTypeList
+
+
+data Implementation = CI {_ci :: ConfigurationImplementation}
+                    | MI {_mi :: ModuleImplementation}
+                    deriving (Eq, Show)
+
 type ConfigurationImplementation = ConfigurationElementList
 type ConfigurationElementList = [ConfigurationElement]
 
@@ -64,20 +99,38 @@ data ConfigurationElement = CC {_cc :: Components}
                           deriving (Eq, Show)
 
 type Components = [ComponentLine]
-data ComponentLine = ComponentLine ComponentRef InstanceName deriving (Eq, Show)
-data ComponentRef = CRI Identifier | CRNew Identifier ComponentArgumentList deriving (Eq, Show)
+
+data ComponentLine = ComponentLine {
+    _compRef :: ComponentRef
+  , _instNam :: InstanceName
+  } deriving (Eq, Show)
+
+data ComponentRef = CRI {_cri :: Identifier}
+                  | CRNew {_crnew :: Identifier, _crnarg :: ComponentArgumentList}
+                  deriving (Eq, Show)
+
 type ComponentArgumentList = [ComponentArgument]
 type InstanceName = Identifier
 type ComponentArgument = Identifier
 data Connection = Equate EndPoint EndPoint
                 | LeftLink EndPoint EndPoint
                 | RightLink EndPoint EndPoint deriving (Eq, Show)
-type EndPoint = IdentifierPath
+
+data EndPoint = EndPoint
+                  IdentifierPath
+                  (Maybe ArgumentExpressionList)
+                  deriving (Eq, Show)
 type IdentifierPath = [Identifier]
+type ArgumentExpressionList = String
+
+type ModuleImplementation = String
 
 makeLenses ''NescFile
 makeLenses ''Component
 makeLenses ''ConfigurationElement
+makeLenses ''ComponentLine
+makeLenses ''ComponentRef
+makeLenses ''Implementation
 
 nescFile :: Parser NescFile
 nescFile = choice
@@ -185,6 +238,7 @@ component = Component
               <$> compKind
               <*> identifier
               <*> optionMaybe compParameters
+              <*> optionMaybe attributes
               <*> componentSpecification
               <*> implementation
 
@@ -200,12 +254,53 @@ compKind = choice
 compParameters :: Parser CompParameters
 compParameters = between (symbol '(') (symbol ')') (many (noneOf ")"))
 
+attributes :: Parser Attributes
+attributes = many (noneOf "{")
+
 componentSpecification :: Parser ComponentSpecification
-componentSpecification = between (symbol '{') (symbol '}') (string "")
+componentSpecification = between (symbol '{') (symbol '}') (many usesProvides)
+
+usesProvides :: Parser UsesProvides
+usesProvides = choice
+                 [ trylexemestr "uses" *> (Uses <$> specificationElementList)
+                 , trylexemestr "provides" *> (Provides <$> specificationElementList)
+                 ]
+
+specificationElementList :: Parser SpecificationElementList
+specificationElementList = choice
+                             [ try $ SpecElems <$> between (symbol '{') (symbol '}') specificationElements
+                             , SpecElem <$> specificationElement <* char ';'
+                             ]
+
+specificationElements :: Parser SpecificationElements
+specificationElements = specificationElement `endBy` symbol ';'
+
+specificationElement :: Parser SpecificationElement
+specificationElement = many (noneOf ";")
+-- trylexemestr "interface" *>
+--                          (SpecificationElement
+--                           <$> interfaceType
+--                           <*> optionMaybe identifier
+--                           <*> optionMaybe instanceParameters
+--                           <*> optionMaybe identifier)
+
+interfaceType :: Parser InterfaceType
+interfaceType = InterfaceType
+                  <$> identifier
+                  <*> optionMaybe typeArguments
+
+typeArguments :: Parser TypeArguments
+typeArguments = between (symbol '<') (symbol '>') (many (many (noneOf "]")))
+
+instanceParameters :: Parser InstanceParameters
+instanceParameters = between (symbol '[') (symbol ']') parameterTypeList
 
 implementation :: Parser Implementation
 implementation = trylexemestr "implementation" *>
-                   between (symbol '{') (symbol '}') configurationImplementation
+                  choice
+                    [ try $ CI <$> between (symbol '{') (symbol '}') configurationImplementation
+                    , MI <$> moduleImplementation
+                    ]
 
 configurationImplementation :: Parser ConfigurationImplementation
 configurationImplementation = configurationElementList
@@ -224,7 +319,7 @@ components :: Parser Components
 components = trylexemestr "components" *> (componentLine `sepBy` symbol ',')
 
 componentLine :: Parser ComponentLine
-componentLine = ComponentLine <$> componentRef <*> (option [] instanceName)
+componentLine = ComponentLine <$> componentRef <*> option [] instanceName
 
 componentRef :: Parser ComponentRef
 componentRef = choice
@@ -236,7 +331,7 @@ componentArgumentList :: Parser ComponentArgumentList
 componentArgumentList = between (symbol '(') (symbol ')') (componentArgument `sepBy` symbol ',')
 
 instanceName :: Parser InstanceName
-instanceName = (lexeme $ string "as") *> identifier
+instanceName = lexeme (string "as") *> identifier
 
 componentArgument :: Parser ComponentArgument
 componentArgument = identifier
@@ -248,13 +343,21 @@ connection = choice
                , f RightLink "->"
                ]
   where
-    f x y = try $ x <$> identifierPath <* (trylexemestr y) <*> identifierPath
+    f x y = try $ x <$> endPoint <* trylexemestr y <*> endPoint
 
 endPoint :: Parser EndPoint
-endPoint = identifierPath
+endPoint = EndPoint
+             <$> identifierPath
+             <*> optionMaybe argumentExpressionList
 
 identifierPath :: Parser IdentifierPath
 identifierPath = identifier `sepBy` symbol '.'
+
+argumentExpressionList :: Parser ArgumentExpressionList
+argumentExpressionList = between (symbol '[') (symbol ']') (many (noneOf "]"))
+
+moduleImplementation :: Parser ModuleImplementation
+moduleImplementation = many anyChar
 
 lexeme :: Parser a -> Parser a
 lexeme p = whitespace >> p <* whitespace
