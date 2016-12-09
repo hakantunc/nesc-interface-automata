@@ -1,23 +1,33 @@
 module ParserSpec where
 
+import Control.Exception
+import Parser.Parser
+import Parser.Pretty
+import System.Environment
+import System.FilePath
 import Test.Hspec
-import Parser
 import Text.Parsec.String
-import System.Process
-import Data.List (delete)
 
 parse :: String -> IO ()
-parse x = do
-  loc <- readCreateProcess (shell $ "locate -l 1 /" ++ x ++ ".nc") ""
-  parseNesc (delete '\n' loc) >>= f >>= (`shouldBe` True)
-  where
-    f (Left  _) = return False
-    f (Right _) = return True
+parse loc = do
+  tosdir <- getEnv "TOSDIR"
+  parsed <- parseNesc $ tosdir </> loc
+  -- either print print parsed
+  -- either print (print . pp) parsed
+  case parsed of
+    Left err -> expectationFailure $ show err
+    Right _  -> assert True (return ()) -- True `shouldBe` True
 
 main :: IO ()
 main = hspec $
-  describe "Parse some interfaces" $ do
-    it "Boot" $ parse "Boot"
-    it "Timer" $ parse "Timer"
-    it "Leds" $ parse "Leds"
-    it "BlinkAppC" $ parse "BlinkAppC"
+  describe "Parser" $ do
+    describe "Parse some interfaces" $ do
+      it "Boot" $ parse "interfaces/Boot.nc"
+      it "Leds" $ parse "interfaces/Leds.nc"
+      it "Timer" $ parse "lib/timer/Timer.nc"
+    describe "Parse some components" $ do
+      it "BlinkAppC" $ parse "../apps/Blink/BlinkAppC.nc"
+      it "BlinkC" $ parse "../apps/Blink/BlinkC.nc"
+      it "MainC" $ parse "../tos/system/MainC.nc"
+      it "LedsC" $ parse "../tos/system/LedsC.nc"
+      it "LedsC" $ parse "../tos/system/TimerMilliC.nc"

@@ -1,96 +1,69 @@
 module Main where
 
 import Control.Lens hiding ((<.>))
-import Data.List (find, union)
-import Parser
-import PrettyPrint
+import Data.List (union)
+import qualified Data.Map.Strict as M
+import Parser.Parser
+import Parser.Syntax
 import System.Directory
 import System.Environment
 import System.FilePath
-import System.IO
-import Text.PrettyPrint (render)
+import Text.Parsec
 
 -- Hardcoded for now
-getTosCPaths :: IO [(String, FilePath)]
-getTosCPaths = do
+getTosCPaths :: FilePath -> IO (M.Map Identifier FilePath)
+getTosCPaths appPath = do
+  let appDir = takeDirectory appPath
+  srcPathsAll <- getDirectoryContents appDir
+  let srcPaths = map (\e -> (dropExtension e, appDir </> e)) (filter (\x -> takeExtension x == ".nc") srcPathsAll)
   tosdir <- getEnv "TOSDIR"
-  return [ ("MainC", tosdir </> "system/MainC.nc")
-         , ("LedsC", tosdir </> "platforms/exp430/hardware/leds/LedsC.nc")
-         , ("TimerMilliC", tosdir </> "system/TimerMilliC.nc")
-         ]
-
-getConnections :: NescFile -> [Connection]
-getConnections = toListOf (c . compImpl . ci . traverse . cn)
+  return $ M.fromList $
+    [ ("MainC", tosdir </> "system/MainC.nc")
+    , ("LedsC", tosdir </> "platforms/exp430/hardware/leds/LedsC.nc")
+    , ("TimerMilliC", tosdir </> "system/TimerMilliC.nc")
+    ] `union` srcPaths
 
 getUsedComponents :: NescFile -> [Identifier]
 getUsedComponents nescFile = comps `union` gen_comps
   where
     comps = toListOf (f . cri) nescFile
     gen_comps = toListOf (f . crnew) nescFile
-    f = c . compImpl . ci . traverse . cc . traverse . compRef
+    f = c . componentImpl . _Just . ci . traverse . cc . traverse . compRef
 
-{-
-This generated configuration will go between connected components in
-  the original application. It will record the state transitions and
-  will pass the commands and events. It is expected that
-  this will not affect the callgraph of the original application.
--}
-generateConnectorConfiguration :: Connection -> (String, NescFile)
-generateConnectorConfiguration x = (comp_name, C component)
+getUsesProvidesInterfaces :: NescFile -> [SpecificationElement]
+getUsesProvidesInterfaces nescFile = f nescFile
   where
-    component = Component GenericConfiguration comp_name (Just "") Nothing specification implementation
-    comp_name = interface ++ "ConnectorC"
-    specification =
-      [Provides
-        (SpecElem $ "interface " ++ interface)
-      ]
-    --           -- (SpecificationElement (InterfaceType interface Nothing) Nothing Nothing Nothing )
-    implementation = CI
-      [ CC [ComponentLine (CRNew newModule []) ""]
-      , CC [ComponentLine (CRI provider) ""]
-      , CN (RightLink (EndPoint [newModule, uInterface] Nothing) (EndPoint [provider, interface] Nothing))
-      , CN (Equate (EndPoint [interface] Nothing) (EndPoint [newModule, pInterface] Nothing))
-      ]
-    [user, provider, interface] = getNames x -- TODO: to get correct interface, we need to parse the module implementation
-    newModule = interface ++ "ConnectorP"
-    uInterface = interface ++ "U"
-    pInterface = interface ++ "P"
-    getNames (Equate    a d) = [getHead a, getHead d, lastElement (getIdent a) (getIdent d)]
-    getNames (LeftLink  a d) = [getHead d, getHead a, lastElement (getIdent a) (getIdent d)]
-    getNames (RightLink a d) = [getHead a, getHead d, lastElement (getIdent a) (getIdent d)]
-    lastElement e1 e2 =
-      last $ if length e1 > length e2 then e1 else e2
-    getHead (EndPoint xs _) = head xs
-    getIdent (EndPoint xs _) = xs
+    f = toListOf (c . componentSpec . traverse . provides . specElem)
 
-getUsedInterfaces :: NescFile -> FilePath -> IO ()
-getUsedInterfaces nescFile srcdir = do
-  let usedComponents = getUsedComponents nescFile
-  tosPaths <- getTosCPaths
-  srcPathsAll <- getDirectoryContents srcdir
-  let srcPaths = map (\e -> (dropExtension e, srcdir </> e)) $ filter (\x -> takeExtension x == ".nc") srcPathsAll
-  let allPaths = filter (\(n,_) -> n `elem` usedComponents) (tosPaths `union` srcPaths)
-  mapM_ (\(compName, compPath) -> getUsesInterfaces compPath) allPaths
+parseListOfComps :: [(Identifier, FilePath)] -> IO [(Identifier, Either ParseError NescFile)]
+parseListOfComps = mapM (\(i, f) -> sequence (i, parseNesc f))
 
-getUsesInterfaces :: FilePath -> IO ()
-getUsesInterfaces filePath = parseNesc filePath >>= either print f
+generateConnectors :: NescFile -> FilePath -> IO ()
+generateConnectors parsed appPath = do
+  tosPaths <- getTosCPaths appPath
+  let comps = mapM (getCompPaths tosPaths) $ getUsedComponents parsed
+  case comps of
+    Left err -> error err
+    Right  c -> do
+      compsParsed <- parseListOfComps c
+      case mapM sequence compsParsed of
+        Left err -> print err
+        Right xs -> do
+          let x = map (\(i, f) -> (i, getUsesProvidesInterfaces f)) xs
+          print x
+      return ()
   where
-    f nescFile = print $ g nescFile
-    g = toListOf (c . compSpec)
+    getCompPaths tosPaths ind = case M.lookup ind tosPaths of
+      Nothing -> Left $ "Missing component src: " ++ ind
+      Just x  -> Right (ind, x)
 
 main :: IO ()
 main = do
   a <- getArgs
   case a of
-    [str] -> parseNesc str >>= either print f --(g str)
-    _ -> error "please pass one argument with the file containing the text to parse"
-  where
-    g srcpath nescFile = getUsedInterfaces nescFile (takeDirectory srcpath)
-    f nescFile = do
-      removeDirectoryRecursive distgen
-      createDirectory distgen
-      mapM_ (\(fname, content) ->
-        writeFile (distgen </> fname <.> ".nc") (render $ prettyPrint content))
-        (map generateConnectorConfiguration (getConnections nescFile))
-      putStr $ "Files are generated in directory: " ++ distgen ++ "\n"
-    distgen = "dist-gen"
+    [path] -> do
+      parsed <- parseNesc path
+      case parsed of
+        Left  x -> print x
+        Right x -> generateConnectors x path
+    _      -> error "please pass one argument"

@@ -6,7 +6,7 @@ The goal of this project is to inject components between each wiring end of the 
 
 * Install TinyOS
 * Pass .nc file to the application
-  - `runhaskell -isrc src/Main.hs $(locate -l 1 /BlinkAppC.nc)`
+  - `runhaskell -isrc src/Main.hs $(TOSDIR)/apps/Blink/BlinkAppC.nc`
 
 ## Steps
 
