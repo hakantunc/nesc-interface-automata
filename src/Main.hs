@@ -30,10 +30,12 @@ getUsedComponents nescFile = comps `union` gen_comps
     gen_comps = toListOf (f . crnew) nescFile
     f = c . componentImpl . _Just . ci . traverse . cc . traverse . compRef
 
-getUsesProvidesInterfaces :: NescFile -> [SpecificationElement]
+getUsesProvidesInterfaces :: NescFile -> ([Identifier], [Identifier])
 getUsesProvidesInterfaces nescFile = f nescFile
   where
-    f = toListOf (c . componentSpec . traverse . provides . specElem)
+    f x = (toListOf (g . uses' . h) x, toListOf (g . provides . h) x)
+    g = c . componentSpec . traverse
+    h = specElem . specElemIType . interTypeIdent
 
 parseListOfComps :: [(Identifier, FilePath)] -> IO [(Identifier, Either ParseError NescFile)]
 parseListOfComps = mapM (\(i, f) -> sequence (i, parseNesc f))

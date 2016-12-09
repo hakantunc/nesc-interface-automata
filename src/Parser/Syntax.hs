@@ -187,17 +187,20 @@ data SpecificationElementList
 -- specification-element
 -- specification-elements specification-element
 
-type SpecificationElement = String
--- data SpecificationElement = SpecificationElement {
---     _specElemIType :: InterfaceType
+data SpecificationElement = SpecificationElement {
+    _specElemIType :: InterfaceType
+  , _unparsed      :: String
+  } deriving (Eq, Show)
 --   , _specElemIName :: Maybe InstanceName
 --   , _specElemIPara :: Maybe InstanceParameters
 --   , _specElemAttr  :: Maybe Attributes
---   } deriving (Eq, Show)
 -- 29. specification-element:
 -- declaration
 -- interface-type instance-nameopt instance-parametersopt attributesopt
 
+data InterfaceType = InterfaceType {
+    _interTypeIdent :: Identifier
+  } deriving (Eq, Show)
 -- 30.interface-type:
 -- interface identifier type-argumentsopt
 
@@ -339,3 +342,5 @@ makeLenses ''ComponentLineSingle       -- 16 17
 makeLenses ''ComponentRef              -- 18
 makeLenses ''UsesProvides              -- 26
 makeLenses ''SpecificationElementList  -- 27
+makeLenses ''SpecificationElement      -- 29
+makeLenses ''InterfaceType             -- 30

@@ -31,3 +31,4 @@ main = hspec $
       it "MainC" $ parse "../tos/system/MainC.nc"
       it "LedsC" $ parse "../tos/system/LedsC.nc"
       it "LedsC" $ parse "../tos/system/TimerMilliC.nc"
+      it "AMSenderC" $ parse "../tos/system/AMSenderC.nc"

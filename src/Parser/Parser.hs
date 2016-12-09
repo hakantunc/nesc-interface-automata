@@ -67,7 +67,7 @@ moduleImplementation
 configurationImplementation :: Parser ConfigurationImplementation
 configurationImplementation
   =  reserved "implementation"
-  *> braces (configurationElement `endBy` symbol ";")
+  *> braces (configurationElement `endBy` semi)
 -- 12 13
 
 configurationElement :: Parser ConfigurationElement
@@ -80,7 +80,7 @@ configurationElement = choice [
 
 components :: Parser Components
 components = reserved "components" *>
-  (componentLineSingle `sepBy` symbol ",")
+  (componentLineSingle `sepBy` comma)
 -- 15
 
 componentLineSingle :: Parser ComponentLineSingle
@@ -100,7 +100,7 @@ componentRef = choice [
 -- 18
 
 componentArgumentList :: Parser ComponentArgumentList
-componentArgumentList = componentArgument `sepBy` symbol ","
+componentArgumentList = componentArgument `sepBy` comma
 -- COMPLETE
 -- 19
 
@@ -125,7 +125,7 @@ endPoint = EndPoint
 -- 22
 
 identifierPath :: Parser IdentifierPath
-identifierPath = identifier `sepBy` symbol "."
+identifierPath = identifier `sepBy` dot
 -- 23
 
 componentSpecification :: Parser ComponentSpecification
@@ -141,22 +141,19 @@ usesProvides = choice [
 
 specificationElementList :: Parser SpecificationElementList
 specificationElementList = choice [
-    SpecElem  <$> specificationElement <* symbol ";"
+    SpecElem  <$> specificationElement
   , SpecElems <$> braces (many specificationElement)
+  ]
 -- 27 28
-                             ]
 -- specificationElements :: Parser SpecificationElements
 -- specificationElements = specificationElement `endBy` symbol ';'
 
 specificationElement :: Parser SpecificationElement
-specificationElement = many (noneOf ";")
--- 29
--- reserved "interface" *>
---                          (SpecificationElement
---                           <$> interfaceType
---                           <*> optionMaybe identifier
---                           <*> optionMaybe instanceParameters
---                           <*> optionMaybe identifier)
+specificationElement
+  = SpecificationElement
+  <$> (InterfaceType <$> (reserved "interface" *> identifier))
+  <*> many (noneOf "{;}") <* semi
+-- 29 30
 
 attributes :: Parser Attributes
 attributes = many attribute
@@ -173,7 +170,7 @@ attribute
 -- # C. Imported Rules
 
 argumentExpressionList :: Parser ArgumentExpressionList
-argumentExpressionList = between (symbol "[") (symbol "]") (many (noneOf "]"))
+argumentExpressionList = brackets (many (noneOf "]"))
 -- C.1
 
 declaration :: Parser Declaration
@@ -183,7 +180,7 @@ declaration = many . noneOf $ ";}"
 declarationList :: Parser DeclarationList
 declarationList = braces declarations
   where
-    declarations = declaration `endBy` symbol ";"
+    declarations = declaration `endBy` semi
 -- C.4
 
 

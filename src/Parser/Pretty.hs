@@ -96,8 +96,17 @@ instance Pretty UsesProvides where
 
 instance Pretty SpecificationElementList where
   pp (SpecElem s) =  pp s <> semi
-  pp (SpecElems s) = text ""
+  pp (SpecElems s) =
+    vcat [
+      lbrace
+    , nest 2 (vcat $ map (\x -> pp x <> semi) s)
+    , rbrace
+    ]
 -- 27
+
+instance Pretty SpecificationElement where
+  pp (SpecificationElement (InterfaceType iden) rest)
+    = text "interface" <+> pp iden <+> pp rest
 
 instance Pretty Attributes where
   pp = vcat . map pp
